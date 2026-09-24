@@ -103,7 +103,7 @@
 
   <script>
     // PASTE YOUR PUBLISHED GOOGLE SHEETS CSV URL HERE:
-    const CSV_URL = "PASTE_YOUR_GOOGLE_SHEETS_CSV_URL_HERE";
+    const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSxx2alBo5EsIKDwTCpUVLXjszZtYGHoR7ej9nsmn5vcMfbRoPXglkDx6uFgsq9y0yXwjDxLpCVg_hF/pub?gid=0&single=true&output=csv";
 
     const tbody = document.getElementById("leaderboard");
     const statusEl = document.getElementById("status");
@@ -165,18 +165,18 @@
         const headers = rows[0].map(h => h.trim().toLowerCase());
         const index = name => headers.indexOf(name.toLowerCase());
 
-        const required = ["player","points","correct","exact","played"];
-        const missing = required.filter(h => index(h) === -1);
-        if (missing.length) {
-          throw new Error("Missing column(s): " + missing.join(", "));
+        if (index("player") === -1) {
+          throw new Error("Missing column: player");
         }
+
+        const pointsIndex = index("points") !== -1 ? index("points") : index("startingpoints");
 
         const players = rows.slice(1).map(r => ({
           player: (r[index("player")] || "").trim(),
-          points: number(r[index("points")]),
-          correct: number(r[index("correct")]),
-          exact: number(r[index("exact")]),
-          played: number(r[index("played")])
+          points: pointsIndex !== -1 ? number(r[pointsIndex]) : 0,
+          correct: index("correct") !== -1 ? number(r[index("correct")]) : 0,
+          exact: index("exact") !== -1 ? number(r[index("exact")]) : 0,
+          played: index("played") !== -1 ? number(r[index("played")]) : 0
         })).filter(p => p.player);
 
         players.sort((a,b) =>
