@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Champions League Friends Challenge</title>
+  <style>
+    :root{
+      --bg:#070b20;
+      --panel:#111735;
+      --panel2:#161e44;
+      --text:#f5f7ff;
+      --muted:#aab3d8;
+      --line:#28325d;
+      --gold:#ffd166;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+      background:linear-gradient(180deg,#080d2a 0%,#050713 100%);
+      color:var(--text);
+      min-height:100vh;
+    }
+    .wrap{max-width:900px;margin:auto;padding:28px 16px 60px}
+    .hero{text-align:center;margin:10px 0 28px}
+    .hero h1{font-size:clamp(28px,6vw,52px);margin:0 0 8px}
+    .hero p{color:var(--muted);margin:0}
+    .card{
+      background:rgba(17,23,53,.94);
+      border:1px solid var(--line);
+      border-radius:20px;
+      overflow:hidden;
+    }
+    .card-head{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      padding:18px 20px;
+      border-bottom:1px solid var(--line);
+    }
+    .card-head h2{margin:0;font-size:20px}
+    #status{font-size:13px;color:var(--muted)}
+    .table-wrap{overflow-x:auto}
+    table{width:100%;border-collapse:collapse;min-width:640px}
+    th,td{padding:15px 16px;text-align:center;border-bottom:1px solid var(--line)}
+    th{
+      color:var(--muted);
+      font-size:12px;
+      text-transform:uppercase;
+      letter-spacing:.08em;
+      background:var(--panel2);
+    }
+    td.player{text-align:left;font-weight:700}
+    tr:last-child td{border-bottom:none}
+    tbody tr:nth-child(1) td:first-child{color:var(--gold);font-weight:900}
+    .rank{font-size:18px;font-weight:800}
+    .points{font-size:18px;font-weight:900}
+    .error{
+      padding:18px 20px;
+      color:#ffd5d5;
+      display:none;
+      line-height:1.5;
+    }
+    footer{text-align:center;color:var(--muted);font-size:12px;margin-top:18px}
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <section class="hero">
+      <h1>🏆 Champions League Challenge</h1>
+      <p>Friends leaderboard</p>
+    </section>
+
+    <section class="card">
+      <div class="card-head">
+        <h2>Leaderboard</h2>
+        <span id="status">Loading…</span>
+      </div>
+
+      <div id="error" class="error"></div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Rank</th>
+              <th style="text-align:left">Player</th>
+              <th>Points</th>
+              <th>Correct</th>
+              <th>Exact</th>
+              <th>Played</th>
+            </tr>
+          </thead>
+          <tbody id="leaderboard"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <footer>Updates automatically from Google Sheets</footer>
+  </main>
+
+  <script>
+    // PASTE YOUR PUBLISHED GOOGLE SHEETS CSV URL HERE:
+    const CSV_URL = "PASTE_YOUR_GOOGLE_SHEETS_CSV_URL_HERE";
+
+    const tbody = document.getElementById("leaderboard");
+    const statusEl = document.getElementById("status");
+    const errorEl = document.getElementById("error");
+
+    function parseCSV(text) {
+      const rows = [];
+      let row = [], cell = "", quoted = false;
+
+      for (let i = 0; i < text.length; i++) {
+        const c = text[i];
+        const next = text[i + 1];
+
+        if (c === '"' && quoted && next === '"') {
+          cell += '"'; i++;
+        } else if (c === '"') {
+          quoted = !quoted;
+        } else if (c === "," && !quoted) {
+          row.push(cell); cell = "";
+        } else if ((c === "\n" || c === "\r") && !quoted) {
+          if (c === "\r" && next === "\n") i++;
+          row.push(cell); cell = "";
+          if (row.some(v => v.trim() !== "")) rows.push(row);
+          row = [];
+        } else {
+          cell += c;
+        }
+      }
+
+      row.push(cell);
+      if (row.some(v => v.trim() !== "")) rows.push(row);
+      return rows;
+    }
+
+    function number(value) {
+      const n = Number(String(value ?? "").trim());
+      return Number.isFinite(n) ? n : 0;
+    }
+
+    async function loadLeaderboard() {
+      if (!CSV_URL.startsWith("http")) {
+        statusEl.textContent = "Setup needed";
+        errorEl.style.display = "block";
+        errorEl.textContent = "Open index.html and replace PASTE_YOUR_GOOGLE_SHEETS_CSV_URL_HERE with your published CSV link.";
+        return;
+      }
+
+      try {
+        statusEl.textContent = "Updating…";
+        errorEl.style.display = "none";
+
+        const res = await fetch(CSV_URL + (CSV_URL.includes("?") ? "&" : "?") + "t=" + Date.now());
+        if (!res.ok) throw new Error("Could not read Google Sheet.");
+
+        const text = await res.text();
+        const rows = parseCSV(text);
+        if (rows.length < 2) throw new Error("The Leaderboard sheet has no player rows.");
+
+        const headers = rows[0].map(h => h.trim().toLowerCase());
+        const index = name => headers.indexOf(name.toLowerCase());
+
+        const required = ["player","points","correct","exact","played"];
+        const missing = required.filter(h => index(h) === -1);
+        if (missing.length) {
+          throw new Error("Missing column(s): " + missing.join(", "));
+        }
+
+        const players = rows.slice(1).map(r => ({
+          player: (r[index("player")] || "").trim(),
+          points: number(r[index("points")]),
+          correct: number(r[index("correct")]),
+          exact: number(r[index("exact")]),
+          played: number(r[index("played")])
+        })).filter(p => p.player);
+
+        players.sort((a,b) =>
+          b.points - a.points ||
+          b.exact - a.exact ||
+          b.correct - a.correct ||
+          a.player.localeCompare(b.player)
+        );
+
+        tbody.innerHTML = players.map((p,i) => `
+          <tr>
+            <td class="rank">${i + 1}</td>
+            <td class="player">${escapeHTML(p.player)}</td>
+            <td class="points">${p.points}</td>
+            <td>${p.correct}</td>
+            <td>${p.exact}</td>
+            <td>${p.played}</td>
+          </tr>
+        `).join("");
+
+        statusEl.textContent = "Updated " + new Date().toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"});
+      } catch (err) {
+        statusEl.textContent = "Error";
+        errorEl.style.display = "block";
+        errorEl.textContent = err.message;
+      }
+    }
+
+    function escapeHTML(value) {
+      return String(value)
+        .replaceAll("&","&amp;")
+        .replaceAll("<","&lt;")
+        .replaceAll(">","&gt;")
+        .replaceAll('"',"&quot;")
+        .replaceAll("'","&#039;");
+    }
+
+    loadLeaderboard();
+    setInterval(loadLeaderboard, 60000);
+  </script>
+</body>
+</html>
