@@ -6,19 +6,19 @@
   <title>Champions League Friends Challenge</title>
   <style>
     :root{
-      --bg:#070b20;
-      --panel:#111735;
-      --panel2:#161e44;
-      --text:#f5f7ff;
-      --muted:#aab3d8;
-      --line:#28325d;
-      --gold:#ffd166;
+      --bg:#ffffff;
+      --panel:#ffffff;
+      --panel2:#f6f7fb;
+      --text:#111827;
+      --muted:#6b7280;
+      --line:#e5e7eb;
+      --gold:#b7791f;
     }
     *{box-sizing:border-box}
     body{
       margin:0;
       font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
-      background:linear-gradient(180deg,#080d2a 0%,#050713 100%);
+      background:#ffffff;
       color:var(--text);
       min-height:100vh;
     }
@@ -27,7 +27,7 @@
     .hero h1{font-size:clamp(28px,6vw,52px);margin:0 0 8px}
     .hero p{color:var(--muted);margin:0}
     .card{
-      background:rgba(17,23,53,.94);
+      background:var(--panel);
       border:1px solid var(--line);
       border-radius:20px;
       overflow:hidden;
@@ -57,9 +57,13 @@
     tbody tr:nth-child(1) td:first-child{color:var(--gold);font-weight:900}
     .rank{font-size:18px;font-weight:800}
     .points{font-size:18px;font-weight:900}
+    .last-pick{display:inline-block;min-width:58px;padding:6px 10px;border-radius:999px;font-weight:800}
+    .last-pick.positive{background:#dcfce7;color:#166534}
+    .last-pick.negative{background:#fee2e2;color:#b91c1c}
+    .last-pick.neutral{background:#f3f4f6;color:#6b7280}
     .error{
       padding:18px 20px;
-      color:#ffd5d5;
+      color:#b91c1c;
       display:none;
       line-height:1.5;
     }
@@ -87,10 +91,8 @@
             <tr>
               <th>Rank</th>
               <th style="text-align:left">Player</th>
-              <th>Points</th>
-              <th>Correct</th>
-              <th>Exact</th>
-              <th>Played</th>
+              <th>Total Points</th>
+              <th>Last Pick</th>
             </tr>
           </thead>
           <tbody id="leaderboard"></tbody>
@@ -169,33 +171,35 @@
           throw new Error("Missing column: player");
         }
 
-        const pointsIndex = index("points") !== -1 ? index("points") : index("startingpoints");
+        const pointsIndex = index("totalpoints") !== -1
+          ? index("totalpoints")
+          : (index("points") !== -1 ? index("points") : index("startingpoints"));
+        const lastPickIndex = index("lastpick");
 
         const players = rows.slice(1).map(r => ({
           player: (r[index("player")] || "").trim(),
           points: pointsIndex !== -1 ? number(r[pointsIndex]) : 0,
-          correct: index("correct") !== -1 ? number(r[index("correct")]) : 0,
-          exact: index("exact") !== -1 ? number(r[index("exact")]) : 0,
-          played: index("played") !== -1 ? number(r[index("played")]) : 0
+          lastPick: lastPickIndex !== -1 && String(r[lastPickIndex] ?? "").trim() !== ""
+            ? number(r[lastPickIndex])
+            : null
         })).filter(p => p.player);
 
         players.sort((a,b) =>
           b.points - a.points ||
-          b.exact - a.exact ||
-          b.correct - a.correct ||
           a.player.localeCompare(b.player)
         );
 
-        tbody.innerHTML = players.map((p,i) => `
+        tbody.innerHTML = players.map((p,i) => {
+          const pickClass = p.lastPick === null ? "neutral" : (p.lastPick > 0 ? "positive" : (p.lastPick < 0 ? "negative" : "neutral"));
+          const pickText = p.lastPick === null ? "—" : (p.lastPick > 0 ? `+${p.lastPick}` : `${p.lastPick}`);
+          return `
           <tr>
             <td class="rank">${i + 1}</td>
             <td class="player">${escapeHTML(p.player)}</td>
             <td class="points">${p.points}</td>
-            <td>${p.correct}</td>
-            <td>${p.exact}</td>
-            <td>${p.played}</td>
-          </tr>
-        `).join("");
+            <td><span class="last-pick ${pickClass}">${pickText}</span></td>
+          </tr>`;
+        }).join("");
 
         statusEl.textContent = "Updated " + new Date().toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"});
       } catch (err) {
